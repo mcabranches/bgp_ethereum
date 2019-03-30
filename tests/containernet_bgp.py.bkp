@@ -1,0 +1,56 @@
+#!/usr/bin/python
+"""
+This is the most simple example to showcase Containernet.
+"""
+from mininet.net import Containernet
+from mininet.node import Controller
+from mininet.cli import CLI
+from mininet.link import TCLink
+from mininet.log import info, setLogLevel
+from mininet.link import Link
+setLogLevel('info')
+
+#net = Containernet(controller=Controller)
+#m-> no SDN controller
+net = Containernet()
+#info('*** Adding controller\n')
+#net.addController('c0')
+info('*** Adding docker containers\n')
+#d1 = net.addDocker('d1', ip='10.0.0.251', dimage="quagga")
+#d2 = net.addDocker('d2', ip='10.0.0.252', dimage="quagga")
+#d3 = net.addDocker('d3', ip='10.0.0.253', dimage="quagga")
+#d3 = net.addDocker('d4', ip='10.0.0.253', dimage="quagga")
+
+d1 = net.addDocker('d1', dimage="quagga")
+d2 = net.addDocker('d2', dimage="quagga")
+d3 = net.addDocker('d3', dimage="quagga")
+d4 = net.addDocker('d4', dimage="quagga")
+#m-> connect d1->d2 using a link object (no switch)
+linkd1d2 = Link(d1, d2)
+linkd1d3 = Link(d1, d3)
+
+d1.setIP('10.0.123.1/24', intf=linkd1d2.intf1)
+d2.setIP('10.0.123.2/24', intf=linkd1d2.intf2)
+d1.setIP('10.0.124.1/24', intf=linkd1d3.intf1)
+d3.setIP('10.0.124.2/24', intf=linkd1d3.intf2)
+info('*** Adding manual routes for testing')
+d2.cmd('route add -net 10.0.124.0/24 gw 10.0.123.1')
+d3.cmd('route add -net 10.0.123.0/24 gw 10.0.124.1')
+#info('*** Adding switches\n')
+#s1 = net.addSwitch('s1')
+#s2 = net.addSwitch('s2')
+#info('*** Creating links\n')
+#net.addLink(d1, s1)
+#net.addLink(s1, s2, cls=TCLink, delay='100ms', bw=1)
+#net.addLink(s2, d2)
+info('*** Starting network\n')
+net.start()
+info('*** Testing connectivity\n')
+net.ping([d1, d2])
+#net.ping([d1, d3])
+#net.ping([d2, d3])
+info('*** Running CLI\n')
+CLI(net)
+info('*** Stopping network')
+net.stop()
+
