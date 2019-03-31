@@ -35,11 +35,11 @@ sc = net.addSwitch('s7')
 
 info('*** Adding docker containers\n')
 
-R1 = net.addDocker('R1', ip="11.0.1.254/24", dimage="r1-quagga")
-R2 = net.addDocker('R2', ip="12.0.1.254/24", dimage="r2-quagga")
-R3 = net.addDocker('R3', ip="13.0.1.254/24", dimage="r3-quagga")
+R1 = net.addDocker('R1', ip="9.0.0.1/24", dimage="r1-quagga")
+R2 = net.addDocker('R2', ip="9.0.0.2/24", dimage="r2-quagga")
+R3 = net.addDocker('R3', ip="9.0.1.2/24", dimage="r3-quagga")
 # Attacker node
-R4 = net.addDocker('R4', ip="13.0.1.254/24", dimage="r4-quagga")
+R4 = net.addDocker('R4', ip="9.0.4.2/24", dimage="r4-quagga")
 
 # add end host code here
 WS = net.addDocker('WS', ip="13.0.1.1/24", dimage="ws-quagga")
@@ -49,21 +49,19 @@ C1 = net.addDocker('C1', ip="11.0.1.1/24", dimage="quaggabase")
 
 info("Configuring IP addresses of the local connections\n")
 
-# Attack link
-net.addLink(R1,sc,params1={"ip":"9.0.4.1/24"})
-net.addLink(R4,sc,params1={"ip":"9.0.4.2/24"})
-
 # Link routers to each other
-net.addLink(R1,sa,params1={"ip":"9.0.0.1/24"})
-net.addLink(R2,sa,params1={"ip":"9.0.0.2/24"})
-net.addLink(R2,sb,params1={"ip":"9.0.1.1/24"})
-net.addLink(R3,sb,params1={"ip":"9.0.1.2/24"})
+net.addLink(R1,sa,port1=0,params1={"ip":"9.0.0.1/24"})
+net.addLink(R1,sc,port1=1,params1={"ip":"9.0.4.1/24"})
+net.addLink(R2,sa,port1=0,params1={"ip":"9.0.0.2/24"})
+net.addLink(R2,sb,port1=1,params1={"ip":"9.0.1.1/24"})
+net.addLink(R3,sb,port1=0,params1={"ip":"9.0.1.2/24"})
+net.addLink(R4,sc,port1=0,params1={"ip":"9.0.4.2/24"})
 
 # Link routers to their associated AS switches
-net.addLink(R1,s1,params1={"ip":"11.0.1.254/24"})
-net.addLink(R2,s2,params1={"ip":"12.0.1.254/24"})
-net.addLink(R3,s3,params1={"ip":"13.0.1.254/24"})
-net.addLink(R4,s4,params1={"ip":"13.0.1.254/24"})
+net.addLink(R1,s1,port1=2,params1={"ip":"11.0.1.254/24"})
+net.addLink(R2,s2,port1=2,params1={"ip":"12.0.1.254/24"})
+net.addLink(R3,s3,port1=1,params1={"ip":"13.0.1.254/24"})
+net.addLink(R4,s4,port1=1,params1={"ip":"13.0.1.254/24"})
 
 # Link hosts to their AS switches
 net.addLink(C1,s1,params1={"ip":"11.0.1.1/24"})
