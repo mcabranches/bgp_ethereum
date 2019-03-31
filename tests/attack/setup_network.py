@@ -74,6 +74,13 @@ R1.cmd('/start.sh &')
 R2.cmd('/start.sh &')
 R3.cmd('/start.sh &')
 
+# Magic sauce to make the attacker node behave right. There's a
+# strange behavior that makes it such that the node doesn't
+# do what it should unless some non-bash command has been run
+# via the Docker.cmd member or by creating an interative
+# terminal via docker exec.
+R4.cmd('ifconfig')
+
 WS.cmd('route del default')
 WS.cmd('route add default gw 13.0.0.1')
 AWS.cmd('route del default')
@@ -86,12 +93,13 @@ AWS.cmd("/webserver.py --text 'Attacking Webserver' &")
 
 info('*** Starting network\n')
 net.start()
-info('*** Stalling for 5 seconds to allow BGP advertisisng \n')
-time.sleep(5)
+info('*** Stalling for 10 seconds to allow BGP advertisisng \n')
+time.sleep(10)
 info('*** Testing connectivity\n')
 net.ping([R1, R2])
 net.ping([R2, R3])
 net.ping([C1, WS])
+
 info('*** Running CLI\n')
 CLI(net)
 info('*** Stopping network')
