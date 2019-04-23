@@ -21,6 +21,11 @@ contract IANA {
     mapping (uint32 => address) public ASNList;
     // List of prefixes.
     Prefix[] public prefixes;
+    // Holds the table of links keyed by sha256(encodePacked(ASN1,ASN2))
+    // A link is valid if both ASN1->ASN2 and ASN2->ASN1 exist.
+    // This particular structure has the potential to be astoundingly large.
+    mapping (bytes32 => bool) links;
+
 
     /// Simple modifier to ensure that only owners can make changes
     modifier onlyOwners {
@@ -371,5 +376,36 @@ contract IANA {
         }
 
         return true;
+    }
+    
+        /// Returns the contract address of the contact that contains the desired function.
+    /// @param AS1 The ASN of the first end of the link
+    /// @param AS2 The ASN of the first end of the link
+    /// @return bool True if there is a valid, bidirectional link from AS1 to AS2
+    function link_validateLink(uint32 AS1, uint32 AS2) public view returns (bool) {
+        // Make the hash for the link in the forward direction
+        bytes32 linkhash1 = sha256(abi.encodePacked(AS1, AS2));
+        // Make the hash for the link in the reverse direction
+        bytes32 linkhash2 = sha256(abi.encodePacked(AS2, AS1));
+        // Return true if both links are in the valid link table.
+        return links[linkhash1] && links[linkhash2];
+    }
+
+    /// Marks that the caller believes it has a link to a particular destination ASN.
+    /// @param myASN The ASN the caller owns
+    /// @param destinationASN The ASN that the caller links to.
+    function link_addLink(uint32 myASN, uint32 destinationASN) public {
+        require(msg.sender == ASNList[myASN]);
+        bytes32 linkhash = sha256(abi.encodePacked(myASN, destinationASN));
+        links[linkhash] = true;
+    }
+
+    /// Marks that the caller believes it no longer has a link to a particular destination ASN.
+    /// @param myASN The ASN the caller owns
+    /// @param destinationASN The ASN that the caller links to.
+    function link_removeLink(uint32 myASN, uint32 destinationASN) public {
+        require(msg.sender == ASNList[myASN]);
+        bytes32 linkhash = sha256(abi.encodePacked(myASN, destinationASN));
+        links[linkhash] = false;
     }
 }
