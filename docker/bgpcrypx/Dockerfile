@@ -10,18 +10,9 @@ RUN pip3 install eth-testrpc
 RUN pip3 install web3
 RUN pip3 install ipython
 RUN pip3 install netaddr
-COPY bgpd.conf /etc/quagga/
-COPY zebra.conf /etc/quagga/
 COPY ids.py /ids.py
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
-#COPY pynids /pynids
-#RUN apt-get install -y libglib2.0-dev
-#RUN apt-get install -y libnet1-dev
-#RUN apt-get install -y libpcap-dev
-#WORKDIR /pynids/
-#RUN python3 setup.py build
-#RUN python3 setup.py install
 RUN apt-get install -y build-essential python-dev libnetfilter-queue-dev iptables
 RUN DEBIAN_FRONTEND=noninteractive apt-get -y install tshark
 RUN pip3 install NetfilterQueue

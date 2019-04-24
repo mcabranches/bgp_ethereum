@@ -1,1 +1,1 @@
-docker build -t r1-bgpcrypx:latest .
+docker build -t bgpcrypx:latest -t bgpcrypx:1 .
