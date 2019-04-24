@@ -1,0 +1,17 @@
+syntax: glob
+*.pyc
+*.swp
+*~
+*.swo
+.\#*
+build/*
+*.o
+libnids/autom4te.cache/*
+libnids/Makefile
+libnids/config.log
+libnids/config.status
+libnids/samples/Makefile
+libnids/src/Makefile
+libnids/src/config.h
+libnids/src/libnids.a
+libnids/src/libnids.so
