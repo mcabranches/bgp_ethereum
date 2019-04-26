@@ -2,12 +2,54 @@ from netfilterqueue import NetfilterQueue
 import socket
 from scapy.all import *
 import os
+import time
 import pyshark
 import threading
 import queue
 import netaddr
 from web3 import Web3, HTTPProvider
 from eth_account import Account
+
+#Author Marcelo de Abranches (made0661@colorado.edu)
+
+
+#Policy agent - currently it configures a higher local preference for routes that were completely validated
+def policy_agent(valid_update_dict):
+    print('Installing local preference for checked path')
+    myPeer = valid_update_dict['peer']
+    prefix = valid_update_dict['prefix']
+    length = valid_update_dict['length']
+    #command_accept_all= 'vtysh -c "config terminal" -c "access-list 1 permit 0.0.0.0 255.255.255.255" -c "router bgp 1" -c "neighbor 9.0.0.2 route-map PERMIT-ALL in" -c "route-map PERMIT-ALL permit 10" -c "match ip address 1" -c "exit" -c "exit" -c "clear ip bgp 9.0.0.2 soft"'
+    #command_accept_all= 'vtysh -c "config terminal" -c "access-list 1 permit 0.0.0.0 255.255.255.255" -c "router bgp 1" -c "neighbor 9.0.0.2 route-map LOCAL-PREF-CHECKED-150 out" -c "route-map LOCAL-PREF-CHECKED-150 permit 20" -c "match ip address 1" -c "exit" -c "exit" -c "clear ip bgp 9.0.0.2 soft"'
+    #command_accept_all= 'vtysh -c "clear ip bgp 9.0.0.2 soft"'
+    #print(generate_local_pref_command(myAS, myPeer, prefix, length))
+    apply_policy1, apply_policy2, reload_bgp = generate_local_pref_command(myAS, myPeer, prefix, length)
+    print(apply_policy1)
+    print(apply_policy2)
+    print(reload_bgp)
+    os.system(apply_policy1)
+    os.system(apply_policy2)
+    os.system(reload_bgp)
+    return 0
+
+#Generates the local pref command to be sent to Quagga
+def generate_local_pref_command(myAS, myPeer, prefix, length):
+    #probably we will also need to cotrol the sequence number of the policies
+    prefix_list_name = myPeer.replace('.','-')
+    local_pref_name = 'LP-' + prefix_list_name + '-CKD-150'
+    ip_list_seq = random.randint(1,100)
+    print("111")
+    #apply_policy1 ='vtysh -c "config terminal" -c "ip prefix-list ' + prefix_list_name + ' seq 5 permit ' + prefix + '/' + length + '" -c "router bgp ' + myAS + '" -c "neighbor ' + myPeer + ' route-map ' + local_pref_name + ' in" -c "route-map ' + local_pref_name + ' permit 10" -c "match ip address prefix-list ' + prefix_list_name + '" -c "set local-preference 150" -c "exit" -c "exit" -c "clear ip bgp ' + myPeer + ' soft"'
+    apply_policy1 ='vtysh -c "config terminal" -c "ip prefix-list ' + prefix_list_name + ' seq ' + str(ip_list_seq) + ' permit ' + prefix + '/' + length + '" -c "router bgp ' + myAS + '" -c "neighbor ' + myPeer + ' route-map ' + local_pref_name + ' in" -c "route-map ' + local_pref_name + ' permit 10" -c "match ip address prefix-list ' + prefix_list_name + '" -c "set local-preference 150"'
+    print('222')
+    #policy 2 is needed to avoid updates being rejected if they do not match conditions at the route-map
+    #apply_policy2 = 'vtysh -c "config terminal" -c "access-list 1 permit 0.0.0.0 255.255.255.255" -c "router bgp' + myAS + '" -c "neighbor ' + myPeer + ' route-map ' + local_pref_name + 'in" -c "route-map ' + local_pref_name + 'permit 20" -c "match ip address 1" -c "exit" -c "exit" -c "clear ip bgp ' + myPeer + 'soft"'
+    apply_policy2 = 'vtysh -c "config terminal" -c "access-list 1 permit 0.0.0.0 255.255.255.255" -c "router bgp ' + myAS + '" -c "neighbor ' + myPeer + ' route-map ' + local_pref_name + ' out" -c "route-map ' + local_pref_name + ' permit 20" -c "match ip address 1"'
+    reload_bgp = 'vtysh -c "clear ip bgp ' + myPeer + ' soft"'
+    ip_list_seq += 1
+    print(ip_list_seq)
+    return apply_policy1, apply_policy2, reload_bgp
+
 
 
 #Code for what to do after receiving a invalid update should go here
@@ -30,7 +72,7 @@ def check_as_prefix(_prefix, _length, _AS):
     prefix = netaddr.IPAddress(_prefix)
     length =_length
     AS = _AS
-    ownPrefix=IANA.functions.IANA_prefixCheck(int(prefix), int(length), int(AS)).call()
+    ownPrefix = IANA.functions.IANA_prefixCheck(int(prefix), int(length), int(AS)).call()
     return ownPrefix
 
 #Checks AS anounced paths in the IANA smart contract
@@ -121,19 +163,26 @@ def validate_update_message(bgp_update_messages):
             length = bgp_update_msg['prefix_length']
             is_as_prefix_valid=check_as_prefix(prefix, length, AS)
             valid = is_as_prefix_valid
+            update_dict = {}
+            update_dict['peer'] = peer
+            update_dict['AS'] = AS
+            update_dict['next_hop'] = next_hop
+            update_dict['prefix'] = prefix
+            update_dict['length'] = length
             if (len(path_array) > 1):
                 is_path_array_valid=check_path(path_array)
                 valid = (is_as_prefix_valid and is_path_array_valid)
             if (valid == False):
-                invalid_update = {}
-                invalid_update['peer'] = peer
-                invalid_update['AS'] = AS
-                invalid_update['next_hop'] = next_hop
-                invalid_update['prefix'] = prefix
-                invalid_update['length'] = length
-                handle_invalid_update(invalid_update)
+                handle_invalid_update(update_dict)
             else:
-                print("Received valid update")
+                cur_hash = hash(update_dict['peer'] + update_dict['AS'] + update_dict['prefix'] + update_dict['length'])
+                #This will avoid unnecessary policy_agent calls
+                if cur_hash not in policy_hash_list:
+                    print("Received valid update, calling policy agent")
+                    policy_hash_list.append(cur_hash)
+                    policy_agent(update_dict)
+                else:
+                    print("Policy exists for this update message. Will not call policy agent")
         except:
             pass
             #print('Attribute not found in dict')
@@ -151,6 +200,10 @@ def get_packet(pkt):
         process_packet_event.set()
         process_packet_event.clear()
 
+#Policy agent configs (put as env variable)
+myAS='1'
+policy_hash_list=[] #This is used to know if a policy has already been applied
+ip_list_seq = 1
 #Ethereum stuff
 infura_provider = HTTPProvider('https://ropsten.infura.io')
 web3=Web3(infura_provider)
@@ -161,7 +214,6 @@ IANA_abi='[{"constant":false,"inputs":[{"name":"myASN","type":"uint32"},{"name":
 #CheckASPrefix=web3.eth.contract(address=CheckASPrefix_addr, abi=CheckASPrefix_abi)
 IANA = web3.eth.contract(address=IANA_addr, abi=IANA_abi)
 #IDS stuff
-#pkt_q = queue.Queue()
 bgp_pkt_q = queue.Queue()
 process_packet_event = threading.Event()
 process_bgp_pkt_t = threading.Thread(target=process_bgp_pkt)
