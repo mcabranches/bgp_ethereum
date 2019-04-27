@@ -19,14 +19,7 @@ def policy_agent(valid_update_dict):
     myPeer = valid_update_dict['peer']
     prefix = valid_update_dict['prefix']
     length = valid_update_dict['length']
-    #command_accept_all= 'vtysh -c "config terminal" -c "access-list 1 permit 0.0.0.0 255.255.255.255" -c "router bgp 1" -c "neighbor 9.0.0.2 route-map PERMIT-ALL in" -c "route-map PERMIT-ALL permit 10" -c "match ip address 1" -c "exit" -c "exit" -c "clear ip bgp 9.0.0.2 soft"'
-    #command_accept_all= 'vtysh -c "config terminal" -c "access-list 1 permit 0.0.0.0 255.255.255.255" -c "router bgp 1" -c "neighbor 9.0.0.2 route-map LOCAL-PREF-CHECKED-150 out" -c "route-map LOCAL-PREF-CHECKED-150 permit 20" -c "match ip address 1" -c "exit" -c "exit" -c "clear ip bgp 9.0.0.2 soft"'
-    #command_accept_all= 'vtysh -c "clear ip bgp 9.0.0.2 soft"'
-    #print(generate_local_pref_command(myAS, myPeer, prefix, length))
     apply_policy1, apply_policy2, reload_bgp = generate_local_pref_command(myAS, myPeer, prefix, length)
-    print(apply_policy1)
-    print(apply_policy2)
-    print(reload_bgp)
     os.system(apply_policy1)
     os.system(apply_policy2)
     os.system(reload_bgp)
@@ -38,12 +31,8 @@ def generate_local_pref_command(myAS, myPeer, prefix, length):
     prefix_list_name = myPeer.replace('.','-')
     local_pref_name = 'LP-' + prefix_list_name + '-CKD-150'
     ip_list_seq = random.randint(1,100)
-    print("111")
-    #apply_policy1 ='vtysh -c "config terminal" -c "ip prefix-list ' + prefix_list_name + ' seq 5 permit ' + prefix + '/' + length + '" -c "router bgp ' + myAS + '" -c "neighbor ' + myPeer + ' route-map ' + local_pref_name + ' in" -c "route-map ' + local_pref_name + ' permit 10" -c "match ip address prefix-list ' + prefix_list_name + '" -c "set local-preference 150" -c "exit" -c "exit" -c "clear ip bgp ' + myPeer + ' soft"'
     apply_policy1 ='vtysh -c "config terminal" -c "ip prefix-list ' + prefix_list_name + ' seq ' + str(ip_list_seq) + ' permit ' + prefix + '/' + length + '" -c "router bgp ' + myAS + '" -c "neighbor ' + myPeer + ' route-map ' + local_pref_name + ' in" -c "route-map ' + local_pref_name + ' permit 10" -c "match ip address prefix-list ' + prefix_list_name + '" -c "set local-preference 150"'
-    print('222')
     #policy 2 is needed to avoid updates being rejected if they do not match conditions at the route-map
-    #apply_policy2 = 'vtysh -c "config terminal" -c "access-list 1 permit 0.0.0.0 255.255.255.255" -c "router bgp' + myAS + '" -c "neighbor ' + myPeer + ' route-map ' + local_pref_name + 'in" -c "route-map ' + local_pref_name + 'permit 20" -c "match ip address 1" -c "exit" -c "exit" -c "clear ip bgp ' + myPeer + 'soft"'
     apply_policy2 = 'vtysh -c "config terminal" -c "access-list 1 permit 0.0.0.0 255.255.255.255" -c "router bgp ' + myAS + '" -c "neighbor ' + myPeer + ' route-map ' + local_pref_name + ' out" -c "route-map ' + local_pref_name + ' permit 20" -c "match ip address 1"'
     reload_bgp = 'vtysh -c "clear ip bgp ' + myPeer + ' soft"'
     ip_list_seq += 1
