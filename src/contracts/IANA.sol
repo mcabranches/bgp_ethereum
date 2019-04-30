@@ -60,12 +60,9 @@ contract IANA {
         // If their masks are the same
         if (mask1 == mask2) {
             // As are their IPs
-            if (ip1 == ip2) {
+            if ((ip1 >> (32-mask1)) == (ip2 >> (32-mask1))) {
                 // Then they're the same.
                 return PrefixCompareResult.Equal;
-            } else {
-                // Otherwise they can't intersect ever.
-                return PrefixCompareResult.NoIntersection;
             }
         }
         
@@ -86,7 +83,7 @@ contract IANA {
         if (network1 != network2) {
             return PrefixCompareResult.NoIntersection;
         }
-        
+
         // If they reference the same network, it means the bigger one contains the smaller one.
         if (mask1 < mask2) {
             return PrefixCompareResult.OneConatinsTwo;
