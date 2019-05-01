@@ -6,6 +6,7 @@ import time
 import pyshark
 import threading
 import queue
+import random
 import netaddr
 from web3 import Web3, HTTPProvider
 from eth_account import Account
@@ -19,7 +20,8 @@ def policy_agent(valid_update_dict):
     myPeer = valid_update_dict['peer']
     prefix = valid_update_dict['prefix']
     length = valid_update_dict['length']
-    apply_policy1, apply_policy2, reload_bgp = generate_local_pref_command(myAS, myPeer, prefix, length)
+    create_prefix_list, apply_policy1, apply_policy2, reload_bgp = generate_local_pref_command(myAS, myPeer, prefix, length)
+    os.system(create_prefix_list)
     os.system(apply_policy1)
     os.system(apply_policy2)
     os.system(reload_bgp)
@@ -31,20 +33,25 @@ def generate_local_pref_command(myAS, myPeer, prefix, length):
     prefix_list_name = myPeer.replace('.','-')
     local_pref_name = 'LP-' + prefix_list_name + '-CKD-150'
     ip_list_seq = random.randint(1,100)
-    apply_policy1 ='vtysh -c "config terminal" -c "ip prefix-list ' + prefix_list_name + ' seq ' + str(ip_list_seq) + ' permit ' + prefix + '/' + length + '" -c "router bgp ' + myAS + '" -c "neighbor ' + myPeer + ' route-map ' + local_pref_name + ' in" -c "route-map ' + local_pref_name + ' permit 10" -c "match ip address prefix-list ' + prefix_list_name + '" -c "set local-preference 150"'
+    create_prefix_list ='vtysh -c "config terminal" -c "ip prefix-list ' + prefix_list_name + ' seq ' + str(ip_list_seq) + ' permit ' + prefix + '/' + length + '"'    
+    apply_policy1 ='vtysh -c "config terminal" -c "router bgp ' + myAS + '" -c "neighbor ' + myPeer + ' route-map ' + local_pref_name + ' in" -c "route-map ' + local_pref_name + ' permit 10" -c "match ip address prefix-list ' + prefix_list_name + '" -c "set local-preference 150"'
     #policy 2 is needed to avoid updates being rejected if they do not match conditions at the route-map
     apply_policy2 = 'vtysh -c "config terminal" -c "access-list 1 permit 0.0.0.0 255.255.255.255" -c "router bgp ' + myAS + '" -c "neighbor ' + myPeer + ' route-map ' + local_pref_name + ' out" -c "route-map ' + local_pref_name + ' permit 20" -c "match ip address 1"'
     reload_bgp = 'vtysh -c "clear ip bgp ' + myPeer + ' soft"'
-    ip_list_seq += 1
-    print(ip_list_seq)
-    return apply_policy1, apply_policy2, reload_bgp
+#    ip_list_seq += 1
+    return create_prefix_list, apply_policy1, apply_policy2, reload_bgp
 
 
 
 #Code for what to do after receiving a invalid update should go here
 def handle_invalid_update(invalid_update_dict):
     print("Invalid update received")
-    print(invalid_update_dict)
+    #print(invalid_update_dict)
+
+def handle_unknown_update(update_dict):
+    print("Validity of update is Unknown")
+    #print(update_dict)
+
 
 #Checks if an AS is using the IANA smart contracts
 #It is used to determine if we consider update messages completely or partially validated
@@ -133,55 +140,74 @@ def process_bgp_pkt():
 def validate_update_message(bgp_update_messages):
     is_as_prefix_valid = False
     is_path_array_valid = False
+    state = "Invalid"
     peer = list(bgp_update_messages.keys())[0]
     print('Received update message from peer ' + peer)
     for bgp_update_msg in bgp_update_messages[peer]:
         try:
-            path_array = bgp_update_msg['update_path_attribute_as_path_segment'].split(':')[1:][0].split(' ')[1:]
-            AS = path_array[len(path_array) - 1]
-            member=check_ASMembership(AS)
-            if member == False:
-                print("This update message was partialy verified")
-                verified = False
-            else:
-                print("This update message was verified at IANA contract")
-                verified = True
-            #will it always be the same of peer address?
             next_hop = bgp_update_msg['update_path_attribute_next_hop']
             prefix = bgp_update_msg['nlri_prefix']
             length = bgp_update_msg['prefix_length']
-            is_as_prefix_valid=check_as_prefix(prefix, length, AS)
-            valid = is_as_prefix_valid
+            path_array = bgp_update_msg['update_path_attribute_as_path_segment'].split(':')[1:][0].split(' ')[1:]
+            AS = path_array[len(path_array) - 1]
             update_dict = {}
             update_dict['peer'] = peer
             update_dict['AS'] = AS
             update_dict['next_hop'] = next_hop
             update_dict['prefix'] = prefix
             update_dict['length'] = length
-            if (len(path_array) > 1):
-                is_path_array_valid=check_path(path_array)
-                valid = (is_as_prefix_valid and is_path_array_valid)
-            if (valid == False):
-                handle_invalid_update(update_dict)
+            member=check_ASMembership(AS)
+            print("#########")
+            print(update_dict)
+            if member == False:
+                #print("This update message was partialy verified")
+                verified = False
+                state = "Unknown"
+                handle_unknown_update(update_dict)
             else:
-                cur_hash = hash(update_dict['peer'] + update_dict['AS'] + update_dict['prefix'] + update_dict['length'])
-                #This will avoid unnecessary policy_agent calls
-                if cur_hash not in policy_hash_list:
-                    print("Received valid update, calling policy agent")
-                    policy_hash_list.append(cur_hash)
-                    policy_agent(update_dict)
+                #print("This update message was verified at IANA contract")
+                verified = True
+                is_as_prefix_valid=check_as_prefix(prefix, length, AS)
+                if is_as_prefix_valid == False:
+                    state = "Invalid"
+                    handle_invalid_update(update_dict)
                 else:
-                    print("Policy exists for this update message. Will not call policy agent")
+                    if (len(path_array) > 1):
+                        is_path_array_valid=check_path(path_array)
+                        valid = (is_as_prefix_valid and is_path_array_valid)
+                    if (valid == False)
+                        if is_as_prefix_valid == False:
+                            print("Prefix was not verified")
+                            handle_invalid_update(update_dict)
+                            state = "Invalid"
+                        else:
+                            print("Prefix was verified")
+                        if is_path_array_valid == False:
+                            print("Path was not verified")
+                            handle_unknown_update(update_dict)
+                        
+                        else:
+                            print("Path was verified")
+                    else:
+                        state = "Valid"
+                        cur_hash = hash(update_dict['peer'] + update_dict['AS'] + update_dict['prefix'] + update_dict['length'])
+                        #This will avoid unnecessary policy_agent calls
+                        if cur_hash not in policy_hash_list:
+                            print("Received valid update, calling policy agent")
+                            policy_hash_list.append(cur_hash)
+                            policy_agent(update_dict)
+                        else:
+                            print("Policy exists for this update message. Will not call policy agent")
         except:
             pass
-            #print('Attribute not found in dict')
-    #change it to return invalid update
-    #return valid
+    #return state
 
 #Gets the packet and sends it to bgpd. Also wakes the thread to process the packet
 def get_packet(pkt):
     #don't wait to forward the pkt
+    #print('pkt arrived')
     pkt.accept()
+    #pkt.drop()
     spkt=IP(pkt.get_payload())
     pkt_dict=create_pkt_dict(spkt)
     if pkt_dict != 0:
@@ -216,4 +242,4 @@ try:
     nfqueue.run_socket(s)
 except KeyboardInterrupt:
    print('Removing iptables rules ...')
-   os.system('iptables -F INPUT')
+   os.system('iptables -F INPUT') 
